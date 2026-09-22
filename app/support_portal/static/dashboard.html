@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="/static/theme.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support Operations Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {
+    --bg: #f5f6f9;
+    --bg-elevated: #ffffff;
+    --bg-elevated-2: #eef0f5;
+    --border: #d8dce6;
+    --border-soft: #e4e7ee;
+    --text: #1b1f2b;
+    --text-dim: #5b6478;
+    --text-dimmer: #8a91a3;
+    --accent: #2f66d6;
+    --accent-soft: rgba(47, 102, 214, 0.12);
+    --green: #1a9d68;
+    --green-soft: rgba(26, 157, 104, 0.12);
+    --amber: #b5790a;
+    --amber-soft: rgba(181, 121, 10, 0.12);
+    --red: #c93a46;
+    --red-soft: rgba(201, 58, 70, 0.12);
+    --radius: 10px;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #0a0d14;
+    --bg-elevated: #12161f;
+    --bg-elevated-2: #171c28;
+    --border: #232a3a;
+    --border-soft: #1b2130;
+    --text: #e7eaf2;
+    --text-dim: #9299ad;
+    --text-dimmer: #5c6478;
+    --accent: #4f8ff7;
+    --accent-soft: rgba(79, 143, 247, 0.14);
+    --green: #35d399;
+    --green-soft: rgba(53, 211, 153, 0.14);
+    --amber: #f5b942;
+    --amber-soft: rgba(245, 185, 66, 0.14);
+    --red: #f0616b;
+    --red-soft: rgba(240, 97, 107, 0.14);
+  }
+
+  * { box-sizing: border-box; }
+
+  /* Browsers exempt <svg> from the default `[hidden] { display: none }`
+     UA rule, so toggling the `hidden` IDL property on an inline SVG icon
+     does nothing without this override. */
+  [hidden] { display: none !important; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+
+  .app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 18px;
+    gap: 12px;
+  }
+
+  /* ---------- header ---------- */
+  .header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .brand-icon {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-titles { display: flex; flex-direction: column; line-height: 1.2; }
+  .brand-name { font-size: 0.72rem; font-weight: 600; color: var(--text-dim); letter-spacing: 0.04em; text-transform: uppercase; }
+  .page-title { font-size: 1.15rem; font-weight: 650; }
+  .page-subtitle { font-size: 0.72rem; color: var(--text-dimmer); }
+
+  .live-pill {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.78rem; font-weight: 600; color: var(--green);
+    background: var(--green-soft); border-radius: 999px; padding: 5px 12px;
+  }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  .live-pill.state-reconnecting { color: var(--amber); background: var(--amber-soft); }
+  .live-pill.state-reconnecting .live-dot { background: var(--amber); }
+  .live-pill.state-disconnected { color: var(--red); background: var(--red-soft); }
+  .live-pill.state-disconnected .live-dot { background: var(--red); animation: none; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .header-right { display: flex; align-items: center; gap: 14px; }
+  .clock { font-size: 0.85rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .btn {
+    font-family: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated);
+    color: var(--text); padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #4380e6; }
+  .btn-outline-red { background: transparent; border-color: var(--red); color: var(--red); }
+  .btn-block { width: 100%; justify-content: center; }
+  .icon { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .theme-toggle {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--bg-elevated); color: var(--text-dim); cursor: pointer; padding: 0;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .theme-toggle .icon { width: 16px; height: 16px; }
+
+  /* ---------- service cards ---------- */
+  .service-cards {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+  }
+  .service-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-top: 3px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .service-card:hover { border-color: var(--accent); }
+  .service-card.health-degraded { border-top-color: var(--amber); }
+  .service-card.health-outage { border-top-color: var(--red); box-shadow: 0 0 0 1px rgba(240,97,107,0.25); }
+  .service-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .service-icon { width: 18px; height: 18px; stroke: var(--text-dim); fill: none; stroke-width: 1.6; flex: 0 0 auto; }
+  .service-name { font-size: 0.82rem; font-weight: 600; }
+  .service-pill {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 0.68rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px; margin-bottom: 6px;
+  }
+  .service-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+  .health-operational .service-pill { color: var(--green); background: var(--green-soft); }
+  .health-operational .service-pill::before { background: var(--green); }
+  .health-degraded .service-pill { color: var(--amber); background: var(--amber-soft); }
+  .health-degraded .service-pill::before { background: var(--amber); }
+  .health-outage .service-pill { color: var(--red); background: var(--red-soft); }
+  .health-outage .service-pill::before { background: var(--red); }
+  .service-bottom { display: flex; align-items: center; justify-content: space-between; }
+  .service-rate { font-size: 0.78rem; color: var(--text-dim); }
+  .service-rate b { color: var(--text); font-size: 0.9rem; }
+  .sparkline { width: 56px; height: 20px; overflow: visible; }
+  .sparkline polyline { fill: none; stroke-width: 1.6; }
+  .health-operational .sparkline polyline { stroke: var(--green); }
+  .health-degraded .sparkline polyline { stroke: var(--amber); }
+  .health-outage .sparkline polyline { stroke: var(--red); }
+
+  /* ---------- main grid ---------- */
+  .main-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-rows: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.85fr);
+    grid-template-areas:
+      "volume   activity"
+      "kpis     sentiment"
+      "kpis     forecast";
+    gap: 10px;
+  }
+
+  .panel {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; flex: 0 0 auto; }
+  .panel-title-group { display: flex; align-items: center; gap: 8px; }
+  .panel-icon { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 1.8; }
+  .panel-title { font-size: 0.85rem; font-weight: 650; }
+  .panel-subtitle { font-size: 0.68rem; color: var(--text-dimmer); }
+  .panel-caption { font-size: 0.66rem; color: var(--text-dimmer); margin-top: 2px; }
+  select.mini-select, .mini-select {
+    font-family: inherit; font-size: 0.72rem; background: var(--bg-elevated-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+  }
+
+  .volume-panel { grid-area: volume; }
+  .volume-legend { display: flex; gap: 12px; font-size: 0.7rem; color: var(--text-dim); align-items: center; }
+  .legend-swatch { display: inline-flex; align-items: center; gap: 5px; }
+  .legend-line { width: 14px; height: 2px; background: var(--accent); display: inline-block; }
+  .legend-line.dashed { background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 7px); }
+  .volume-chart-wrap { flex: 1; min-height: 0; position: relative; }
+  #incidentCaption { font-size: 0.68rem; color: var(--text-dim); margin-top: 4px; flex: 0 0 auto; }
+  #incidentCaption b { font-weight: 600; }
+  #incidentCaption .amber-text { color: var(--amber); }
+  #incidentCaption .red-text { color: var(--red); }
+
+  .activity-panel { grid-area: activity; }
+  .activity-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .activity-item {
+    display: flex; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border-soft);
+    animation: slideIn 0.25s ease-out;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .activity-time { font-size: 0.68rem; color: var(--text-dimmer); width: 56px; flex: 0 0 auto; padding-top: 1px; font-variant-numeric: tabular-nums; }
+  .activity-icon { width: 15px; height: 15px; flex: 0 0 auto; margin-top: 1px; }
+  .activity-icon.action-escalate { stroke: var(--red); }
+  .activity-icon.action-auto_resolve { stroke: var(--green); }
+  .activity-body { font-size: 0.78rem; }
+  .activity-label { font-weight: 600; }
+  .activity-label.action-escalate { color: var(--red); }
+  .activity-label.action-auto_resolve { color: var(--green); }
+  .activity-detail { color: var(--text-dim); font-size: 0.72rem; }
+  .empty-state { color: var(--text-dimmer); font-size: 0.78rem; margin: auto; text-align: center; padding: 12px; }
+
+  .kpi-area { grid-area: kpis; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; min-height: 0; }
+  .kpi-card { justify-content: flex-start; }
+  .kpi-label { font-size: 0.7rem; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .kpi-value { font-size: 1.7rem; font-weight: 700; margin-top: 6px; }
+  .kpi-sub { font-size: 0.75rem; margin-top: 4px; font-weight: 600; }
+  .kpi-sub.green { color: var(--green); }
+  .kpi-sub.red { color: var(--red); }
+  .kpi-sub.dim { color: var(--text-dimmer); font-weight: 400; }
+
+  .donut-card { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+  .donut-chart-wrap { width: 70px; height: 70px; flex: 0 0 auto; position: relative; }
+  .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .donut-center b { font-size: 0.82rem; }
+  .donut-center span { font-size: 0.58rem; color: var(--text-dimmer); }
+  .donut-legend { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 0.68rem; min-width: 0; }
+  .donut-legend-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .donut-legend-row .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+  .donut-legend-name { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .donut-legend-pct { font-weight: 600; }
+
+  .sentiment-panel { grid-area: sentiment; }
+  .sentiment-rows { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; justify-content: center; }
+  .sentiment-row-label { font-size: 0.68rem; color: var(--text-dim); margin-bottom: 3px; display: flex; justify-content: space-between; }
+  .sentiment-bar { display: flex; height: 9px; border-radius: 5px; overflow: hidden; background: var(--bg-elevated-2); }
+  .sentiment-bar span { height: 100%; }
+  .sentiment-bar .seg-positive { background: var(--green); }
+  .sentiment-bar .seg-neutral { background: var(--amber); }
+  .sentiment-bar .seg-negative { background: var(--red); }
+  .sentiment-legend { display: flex; gap: 10px; font-size: 0.65rem; color: var(--text-dimmer); margin-top: 6px; flex: 0 0 auto; }
+  .sentiment-legend .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 3px; }
+
+  .forecast-panel { grid-area: forecast; justify-content: center; }
+  .forecast-direction { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; font-weight: 700; }
+  .forecast-direction.up { color: var(--red); }
+  .forecast-direction.down { color: var(--green); }
+  .forecast-direction .icon { width: 20px; height: 20px; }
+  .forecast-text { font-size: 0.75rem; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
+
+  /* ---------- drawer ---------- */
+  .drawer-overlay {
+    position: fixed; inset: 0; background: rgba(4, 6, 10, 0.55);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    z-index: 40;
+  }
+  .drawer-overlay.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 400px; max-width: 92vw;
+    background: var(--bg-elevated); border-left: 1px solid var(--border);
+    transform: translateX(100%); transition: transform 0.22s ease-out;
+    z-index: 41; display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 18px 8px; flex: 0 0 auto; }
+  .drawer-header h2 { margin: 0; font-size: 1.05rem; }
+  .drawer-header p { margin: 4px 0 0; font-size: 0.75rem; color: var(--text-dimmer); }
+  .drawer-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2rem; line-height: 1; padding: 4px; }
+  .drawer-section { padding: 14px 18px; border-top: 1px solid var(--border-soft); }
+  .drawer-section-title { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 650; margin-bottom: 4px; }
+  .drawer-section-sub { font-size: 0.72rem; color: var(--text-dimmer); margin-bottom: 12px; }
+  .drawer-icon { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 1.8; }
+
+  .gen-status-line { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 600; color: var(--green); margin-bottom: 12px; }
+  .gen-status-line .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  .gen-status-line.paused { color: var(--text-dim); }
+  .gen-status-line.paused .dot { background: var(--text-dimmer); }
+  .row-buttons { display: flex; gap: 8px; margin-bottom: 12px; }
+  .row-buttons .btn { flex: 1; }
+
+  .field-label { font-size: 0.72rem; color: var(--text-dim); font-weight: 600; display: block; margin-bottom: 6px; margin-top: 12px; }
+  .preset-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .preset-btn {
+    font-family: inherit; font-size: 0.74rem; font-weight: 600; padding: 7px 4px; text-align: center;
+    border-radius: 7px; border: 1px solid var(--border); background: var(--bg-elevated-2); color: var(--text-dim);
+    cursor: pointer;
+  }
+  .preset-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  select.full, input.full {
+    width: 100%; font-family: inherit; font-size: 0.82rem; background: var(--bg-elevated-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; margin-top: 6px;
+  }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .status-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; }
+  .status-row-name { font-size: 0.8rem; }
+  .segmented { display: flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .segmented button {
+    font-family: inherit; font-size: 0.68rem; font-weight: 600; padding: 5px 9px; border: none;
+    background: var(--bg-elevated-2); color: var(--text-dimmer); cursor: pointer; border-right: 1px solid var(--border);
+  }
+  .segmented button:last-child { border-right: none; }
+  .segmented button.live-operational { background: var(--green-soft); color: var(--green); }
+  .segmented button.live-degraded { background: var(--amber-soft); color: var(--amber); }
+  .segmented button.live-outage { background: var(--red-soft); color: var(--red); }
+  .segmented button.pending { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  .status-apply-panel {
+    margin-top: 10px; padding: 12px; border-radius: 8px; background: var(--bg-elevated-2);
+    border: 1px solid var(--border);
+  }
+  .status-apply-panel .pending-label { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 4px; }
+  .status-apply-panel .pending-label b { color: var(--text); }
+
+  .admin-token-row { display: flex; align-items: center; gap: 8px; }
+  .admin-token-row input { flex: 1; }
+  .token-toggle { background: none; border: none; color: var(--text-dimmer); font-size: 0.7rem; cursor: pointer; padding: 6px; }
+
+  .drawer-change-token { background: none; border: none; color: var(--text-dimmer); font-size: 0.72rem; cursor: pointer; padding: 0; text-decoration: underline; margin-top: 6px; }
+
+  /* ---------- token modal ---------- */
+  .token-modal-overlay {
+    position: fixed; inset: 0; background: rgba(4, 6, 10, 0.6);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    z-index: 50;
+  }
+  .token-modal-overlay.open { opacity: 1; pointer-events: auto; }
+  .token-modal {
+    width: 360px; max-width: 92vw; background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  }
+  .token-modal h3 { margin: 0 0 6px; font-size: 1rem; }
+  .token-modal-error { color: var(--red); font-size: 0.75rem; margin-top: 8px; }
+
+  /* ---------- toasts ---------- */
+  .toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 60; }
+  .toast {
+    background: var(--bg-elevated-2); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 10px 14px; font-size: 0.78rem; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    animation: toastIn 0.2s ease-out; max-width: 320px;
+  }
+  .toast.error { border-left-color: var(--red); }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  @media (max-width: 1500px) {
+    .service-cards { grid-template-columns: repeat(3, 1fr); }
+    .main-grid { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "volume" "kpis" "sentiment" "activity"; }
+    .kpi-area { grid-template-columns: repeat(2, 1fr); }
+    html, body { overflow-y: auto; }
+    .forecast-panel { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <div class="header-left">
+      <div class="brand-icon">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 6l1.5 11a1.5 1.5 0 0 0 1.5 1.3h9a1.5 1.5 0 0 0 1.5-1.3L19 6M9 6V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6"/></svg>
+      </div>
+      <div class="brand-titles">
+        <span class="brand-name">E-Shop</span>
+        <span class="page-title">Support Operations Dashboard</span>
+        <span class="page-subtitle">Real-time support operations across e-commerce services</span>
+      </div>
+      <div class="live-pill state-live" id="livePill">
+        <span class="live-dot"></span><span id="livePillText">Live Demo</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="clock" id="clock">--:--:--</span>
+      <button type="button" class="theme-toggle" data-theme-toggle aria-label="Switch to dark theme">
+        <svg class="icon icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon icon-moon" viewBox="0 0 24 24" hidden><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <button class="btn" id="openDrawerBtn">
+        <svg class="icon" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="var(--bg-elevated)"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="var(--bg-elevated)"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="var(--bg-elevated)"/></svg>
+        Demo controls
+      </button>
+    </div>
+  </header>
+
+  <section class="service-cards" id="serviceCards"></section>
+
+  <section class="main-grid">
+    <div class="panel volume-panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title-group">
+            <svg class="panel-icon" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6"/></svg>
+            <span class="panel-title">Support Ticket Volume</span>
+          </div>
+          <div class="panel-subtitle">Actual vs. Forecast &middot; tickets/min</div>
+        </div>
+        <div class="volume-legend">
+          <span class="legend-swatch"><span class="legend-line"></span>Actual</span>
+          <span class="legend-swatch"><span class="legend-line dashed"></span>Forecast</span>
+        </div>
+      </div>
+      <div class="volume-chart-wrap"><canvas id="volumeChart"></canvas></div>
+      <div id="incidentCaption">Waiting for ticket activity&hellip;</div>
+    </div>
+
+    <div class="panel activity-panel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <svg class="panel-icon" viewBox="0 0 24 24"><path d="M3 12h4l2 7 4-14 2 7h6"/></svg>
+          <span class="panel-title">Live Activity</span>
+        </div>
+      </div>
+      <div class="activity-list" id="activityList">
+        <div class="empty-state">Waiting for support actions&hellip;</div>
+      </div>
+    </div>
+
+    <div class="kpi-area">
+      <div class="panel kpi-card">
+        <span class="kpi-label">Total Tickets</span>
+        <span class="kpi-value" id="kpiTotal">0</span>
+        <span class="kpi-sub dim">Since demo started</span>
+      </div>
+      <div class="panel kpi-card">
+        <span class="kpi-label">Bot Answered</span>
+        <span class="kpi-value" id="kpiAutoResolved">0</span>
+        <span class="kpi-sub green" id="kpiAutoResolvedPct">&mdash;</span>
+      </div>
+      <div class="panel kpi-card">
+        <span class="kpi-label">Escalated to Human</span>
+        <span class="kpi-value" id="kpiEscalated">0</span>
+        <span class="kpi-sub red" id="kpiEscalatedPct">&mdash;</span>
+      </div>
+      <div class="panel donut-card">
+        <div class="donut-chart-wrap">
+          <canvas id="serviceDonut"></canvas>
+          <div class="donut-center"><b id="donutTotal">0</b><span>total</span></div>
+        </div>
+        <div class="donut-legend" id="donutLegend"></div>
+      </div>
+    </div>
+
+    <div class="panel sentiment-panel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <svg class="panel-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 15c1 1 2.2 1.5 3.5 1.5s2.5-.5 3.5-1.5M9 9.5h.01M15 9.5h.01"/></svg>
+          <span class="panel-title">Sentiment by Service</span>
+        </div>
+      </div>
+      <div class="sentiment-rows" id="sentimentRows"></div>
+      <div class="sentiment-legend">
+        <span><span class="dot" style="background:var(--green)"></span>Positive</span>
+        <span><span class="dot" style="background:var(--amber)"></span>Neutral</span>
+        <span><span class="dot" style="background:var(--red)"></span>Negative</span>
+      </div>
+    </div>
+
+    <div class="panel forecast-panel">
+      <div class="panel-title-group">
+        <svg class="panel-icon" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M3 12h4M17 12h4M4.2 19.8L7 17M17 7l2.8-2.8"/></svg>
+        <span class="panel-title">Forecast Insight</span>
+      </div>
+      <div class="forecast-direction" id="forecastDirection">Forecast warming up&hellip;</div>
+      <div class="forecast-text" id="forecastText">Collecting enough ticket volume history to project the next few minutes.</div>
+    </div>
+  </section>
+</div>
+
+<div class="drawer-overlay" id="drawerOverlay"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div>
+      <h2>Demo Controls</h2>
+      <p>Generate support activity and simulate incidents</p>
+      <button class="drawer-change-token" id="changeTokenBtn">Change admin token</button>
+    </div>
+    <button class="drawer-close" id="closeDrawerBtn">&times;</button>
+  </div>
+
+  <div class="drawer-section">
+    <div class="drawer-section-title">
+      <svg class="drawer-icon" viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+      Ticket Generator
+    </div>
+    <div class="gen-status-line" id="genStatusLine"><span class="dot"></span><span id="genStatusText">Loading generator status&hellip;</span></div>
+    <div class="row-buttons">
+      <button class="btn" id="pauseGenBtn">&#10074;&#10074; Pause</button>
+      <button class="btn" id="resumeGenBtn">&#9654; Resume</button>
+    </div>
+    <span class="field-label">Rate preset</span>
+    <div class="preset-grid" id="ratePresets">
+      <button class="preset-btn" data-rate="0.1">Low</button>
+      <button class="preset-btn active" data-rate="0.2">Normal</button>
+      <button class="preset-btn" data-rate="0.5">High</button>
+      <button class="preset-btn" data-rate="1.0">Spike</button>
+    </div>
+  </div>
+
+  <div class="drawer-section">
+    <div class="drawer-section-title">
+      <svg class="drawer-icon" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+      Manual Burst
+    </div>
+    <div class="drawer-section-sub">Inject a temporary traffic spike</div>
+    <div class="two-col">
+      <div>
+        <span class="field-label" style="margin-top:0">Service override</span>
+        <select class="full" id="burstService">
+          <option value="all">All services</option>
+          <option value="login">login</option>
+          <option value="checkout">checkout</option>
+          <option value="payments">payments</option>
+          <option value="search">search</option>
+          <option value="notifications">notifications</option>
+          <option value="order-tracking">order-tracking</option>
+        </select>
+      </div>
+      <div>
+        <span class="field-label" style="margin-top:0">Duration</span>
+        <select class="full" id="burstDuration">
+          <option value="60">1 minute</option>
+          <option value="300" selected>5 minutes</option>
+          <option value="600">10 minutes</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" id="startBurstBtn" style="margin-top:12px;">&#9889; Start Burst</button>
+  </div>
+
+  <div class="drawer-section">
+    <div class="drawer-section-title">
+      <svg class="drawer-icon" viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 1 5 5v3a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5zM4 21c0-3.5 3.5-6 8-6s8 2.5 8 6"/></svg>
+      Service Status
+    </div>
+    <div class="drawer-section-sub">Change service health status and simulate incidents.</div>
+    <div id="statusRows"></div>
+    <div class="status-apply-panel" id="statusApplyPanel" hidden>
+      <div class="pending-label">Setting <b id="pendingServiceName"></b> to <b id="pendingStatusName"></b></div>
+      <span class="field-label" style="margin-top:4px;">Incident duration</span>
+      <select class="full" id="incidentDuration">
+        <option value="60000">1 minute</option>
+        <option value="300000" selected>5 minutes</option>
+        <option value="600000">10 minutes</option>
+        <option value="">Until manually restored</option>
+      </select>
+      <span class="field-label">Predefined scenario (optional)</span>
+      <select class="full" id="incidentScenario">
+        <option value="">Select a scenario&hellip;</option>
+      </select>
+      <button class="btn btn-primary btn-block" id="applyStatusBtn" style="margin-top:12px;">Apply</button>
+    </div>
+  </div>
+
+  <div class="drawer-section">
+    <button class="btn btn-outline-red btn-block" id="resetDemoBtn" disabled title="No backend reset endpoint is available yet">
+      &#10226; Reset demo
+    </button>
+    <div class="panel-caption" style="margin-top:6px;">Not available &mdash; the backend does not yet support resetting demo state.</div>
+  </div>
+
+</aside>
+
+<div class="token-modal-overlay" id="tokenModalOverlay">
+  <div class="token-modal">
+    <h3>Admin token required</h3>
+    <p class="panel-caption">Needed to use the demo controls (generator, burst, status). Stored only for this browser tab.</p>
+    <div class="admin-token-row">
+      <input class="full" id="tokenModalInput" type="password" placeholder="Admin token" style="margin-top:0;" autocomplete="off">
+      <button class="token-toggle" id="tokenModalToggleBtn">show</button>
+    </div>
+    <div class="token-modal-error" id="tokenModalError" hidden>Invalid token.</div>
+    <div class="row-buttons" style="margin-top:12px; margin-bottom:0;">
+      <button class="btn" id="tokenModalCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="tokenModalSubmitBtn">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const SERVICES = ['login', 'checkout', 'payments', 'search', 'notifications', 'order-tracking'];
+
+const SERVICE_COLORS = {
+  login: '#5b8def',
+  checkout: '#f2a541',
+  payments: '#2dd4bf',
+  search: '#a78bfa',
+  notifications: '#f472b6',
+  'order-tracking': '#60c5f1',
+};
+
+const SERVICE_ICONS = {
+  login: '<circle cx="12" cy="8" r="3.2"/><path d="M5 19c0-3.5 3.1-6 7-6s7 2.5 7 6"/>',
+  checkout: '<path d="M4 6h16M5.5 6l1.4 10.4A1.6 1.6 0 0 0 8.5 18h8a1.6 1.6 0 0 0 1.6-1.4L19.5 6"/><circle cx="9" cy="21" r="1.1"/><circle cx="16" cy="21" r="1.1"/>',
+  payments: '<rect x="3" y="6" width="18" height="13" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="6" y1="14.5" x2="10" y2="14.5"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6"/><line x1="15" y1="15" x2="20" y2="20"/>',
+  notifications: '<path d="M12 3a5 5 0 0 0-5 5v3.5c0 1-.4 2-1 2.8L5 15h14l-1-.7c-.6-.8-1-1.8-1-2.8V8a5 5 0 0 0-5-5z"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/>',
+  'order-tracking': '<rect x="2" y="8" width="12" height="8" rx="1.2"/><path d="M14 11h4l3 3v2h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/>',
+};
+
+const INCIDENT_SCENARIOS = {
+  login: ['Login requests timing out', 'Authentication failures', 'Session validation errors'],
+  checkout: ['Checkout page freezing', 'Orders failing at confirmation', 'Cart validation errors'],
+  payments: ['Payment authorization failures', 'Payment processing timeout', 'Card verification errors'],
+  search: ['Search requests timing out', 'Incomplete search results', 'Product index unavailable'],
+  notifications: ['Email notifications delayed', 'Push notification delivery failure', 'Notification queue backlog'],
+  'order-tracking': ['Tracking information unavailable', 'Shipment updates delayed', 'Carrier status unavailable'],
+};
+
+const STATUS_TO_HEALTH = { operational: 'operational', degraded: 'degraded', outage: 'outage' };
+const HEALTH_LABEL = { operational: 'Healthy', degraded: 'Degraded', outage: 'Down' };
+
+const SPARK_BUCKET_MS = 4000;
+const SPARK_BUCKETS = 20;
+const RATE_WINDOW_MS = 60000;
+const ACTIVITY_BATCH_MS = 2000;
+const ACTIVITY_MAX = 20;
+const SENTIMENT_WINDOW = 50;
+const VOLUME_MAX_POINTS = 30;
+
+// ---------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------
+const services = {};
+SERVICES.forEach(s => {
+  services[s] = {
+    status: 'operational',
+    recentTimestamps: [],
+    bucketCounts: new Array(SPARK_BUCKETS).fill(0),
+    currentBucket: 0,
+    ticketsPerMin: 0,
+    total: 0,
+    sentimentBuf: [],
+  };
+});
+
+const counters = { total_tickets: 0, auto_resolved: 0, escalated: 0 };
+let activity = [];
+let incidents = []; // {ts, service, status}
+let adminToken = sessionStorage.getItem('admin_token') || '';
+
+// AgentAction carries no `service` field (schemas.py) -- only ticket_id and
+// an optional issue_id. Resolve the service from the matching `enriched`
+// event we already saw, falling back to the known-issue's fixed service.
+const ISSUE_TO_SERVICE = {
+  'KI-1001': 'login', 'KI-1002': 'checkout', 'KI-1003': 'payments',
+  'KI-1004': 'search', 'KI-1005': 'notifications', 'KI-1006': 'order-tracking',
+};
+const ticketServiceMap = new Map();
+function rememberTicketService(ticketId, service) {
+  if (!ticketId || !service) return;
+  ticketServiceMap.set(ticketId, service);
+  if (ticketServiceMap.size > 500) ticketServiceMap.delete(ticketServiceMap.keys().next().value);
+}
+function resolveActionService(action) {
+  return ticketServiceMap.get(action.ticket_id) || ISSUE_TO_SERVICE[action.issue_id] || null;
+}
+
+// ---------------------------------------------------------------------
+// Header: clock + connection indicator
+// ---------------------------------------------------------------------
+function tickClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+function setConnectionState(stateName) {
+  const pill = document.getElementById('livePill');
+  const text = document.getElementById('livePillText');
+  pill.classList.remove('state-live', 'state-reconnecting', 'state-disconnected');
+  if (stateName === 'live') {
+    pill.classList.add('state-live');
+    text.textContent = 'Live Demo';
+  } else if (stateName === 'reconnecting') {
+    pill.classList.add('state-reconnecting');
+    text.textContent = 'Reconnecting…';
+  } else {
+    pill.classList.add('state-disconnected');
+    text.textContent = 'Disconnected';
+  }
+}
+
+// ---------------------------------------------------------------------
+// Toasts
+// ---------------------------------------------------------------------
+function showToast(message, isError) {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast' + (isError ? ' error' : '');
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+}
+
+// ---------------------------------------------------------------------
+// Service cards
+// ---------------------------------------------------------------------
+function buildServiceCards() {
+  const container = document.getElementById('serviceCards');
+  container.innerHTML = '';
+  SERVICES.forEach(service => {
+    const card = document.createElement('div');
+    card.className = 'service-card health-operational';
+    card.dataset.service = service;
+    card.innerHTML = `
+      <div class="service-card-top">
+        <svg class="service-icon" viewBox="0 0 24 24">${SERVICE_ICONS[service]}</svg>
+        <span class="service-name">${service}</span>
+      </div>
+      <span class="service-pill">Healthy</span>
+      <div class="service-bottom">
+        <span class="service-rate"><b>0</b> tickets/min</span>
+        <svg class="sparkline" viewBox="0 0 56 20" preserveAspectRatio="none"><polyline points="" /></svg>
+      </div>
+    `;
+    card.addEventListener('click', () => openDrawer(service));
+    container.appendChild(card);
+  });
+}
+
+function renderServiceCard(service) {
+  const s = services[service];
+  const card = document.querySelector(`.service-card[data-service="${service}"]`);
+  if (!card) return;
+  card.className = `service-card health-${s.status}`;
+  card.querySelector('.service-pill').textContent = HEALTH_LABEL[s.status] || 'Healthy';
+  card.querySelector('.service-rate b').textContent = s.ticketsPerMin;
+  const max = Math.max(1, ...s.bucketCounts);
+  const w = 56, h = 20, step = w / (SPARK_BUCKETS - 1);
+  const points = s.bucketCounts.map((v, i) => `${(i * step).toFixed(1)},${(h - (v / max) * (h - 2) - 1).toFixed(1)}`).join(' ');
+  card.querySelector('.sparkline polyline').setAttribute('points', points);
+}
+
+function renderAllServiceCards() {
+  SERVICES.forEach(renderServiceCard);
+}
+
+// ---------------------------------------------------------------------
+// Ticket volume chart (actual + one-step forecast tail + incident markers)
+// ---------------------------------------------------------------------
+let volLabels = [], volTimestamps = [], volActual = [], volForecast = [];
+let hasForecastTail = false;
+
+const nowAndIncidentsPlugin = {
+  id: 'nowAndIncidents',
+  afterDatasetsDraw(chart) {
+    const { ctx, chartArea, scales } = chart;
+    if (!chartArea) return;
+    const xScale = scales.x;
+    const nowIndex = hasForecastTail ? volLabels.length - 2 : volLabels.length - 1;
+    if (nowIndex >= 0 && volLabels.length > 0) {
+      const x = xScale.getPixelForValue(nowIndex);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(146, 153, 173, 0.5)';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, chartArea.top);
+      ctx.lineTo(x, chartArea.bottom);
+      ctx.stroke();
+      ctx.restore();
+      ctx.save();
+      ctx.fillStyle = '#9299ad';
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('NOW', x, chartArea.top - 2);
+      ctx.restore();
+    }
+    incidents.forEach(marker => {
+      let bestIdx = -1, bestDiff = Infinity;
+      volTimestamps.forEach((ts, i) => {
+        const diff = Math.abs(ts - marker.ts);
+        if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+      });
+      if (bestIdx < 0) return;
+      const x = xScale.getPixelForValue(bestIdx);
+      const y = chartArea.top + 10;
+      ctx.save();
+      ctx.fillStyle = marker.status === 'outage' ? '#f0616b' : '#f5b942';
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  },
+};
+Chart.register(nowAndIncidentsPlugin);
+
+const volumeChart = new Chart(document.getElementById('volumeChart'), {
+  type: 'line',
+  data: {
+    labels: volLabels,
+    datasets: [
+      { label: 'Actual', data: volActual, borderColor: '#4f8ff7', backgroundColor: 'rgba(79,143,247,0.08)', fill: true, tension: 0.3, pointRadius: 0, spanGaps: false },
+      { label: 'Forecast', data: volForecast, borderColor: '#4f8ff7', borderDash: [5, 4], tension: 0.3, pointRadius: 0, spanGaps: false },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 200 },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#5c6478', maxRotation: 0, autoSkip: true }, grid: { color: 'rgba(35,42,58,0.6)' } },
+      y: { ticks: { color: '#5c6478' }, grid: { color: 'rgba(35,42,58,0.6)' }, beginAtZero: true },
+    },
+  },
+});
+
+function trimVolumeWindow() {
+  while (volLabels.length > VOLUME_MAX_POINTS + (hasForecastTail ? 1 : 0)) {
+    volLabels.shift(); volTimestamps.shift(); volActual.shift(); volForecast.shift();
+  }
+  if (volTimestamps.length) {
+    incidents = incidents.filter(m => m.ts >= volTimestamps[0] - 5 * 60000);
+  }
+}
+
+function setForecastTail(forecastNext, lastTs, lastValue, intervalMs) {
+  if (hasForecastTail) {
+    volLabels.pop(); volTimestamps.pop(); volActual.pop(); volForecast.pop();
+    hasForecastTail = false;
+  }
+  if (forecastNext == null) return;
+  const tailTs = lastTs + intervalMs;
+  volLabels.push(new Date(tailTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  volTimestamps.push(tailTs);
+  volActual.push(null);
+  volForecast.push(forecastNext);
+  if (volForecast.length >= 2) volForecast[volForecast.length - 2] = lastValue;
+  hasForecastTail = true;
+}
+
+function pushMetricPoint(m) {
+  if (hasForecastTail) {
+    volLabels.pop(); volTimestamps.pop(); volActual.pop(); volForecast.pop();
+    hasForecastTail = false;
+  }
+  const ts = new Date(m.window_end).getTime();
+  volLabels.push(new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  volTimestamps.push(ts);
+  volActual.push(m.count);
+  volForecast.push(null);
+  trimVolumeWindow();
+
+  let intervalMs = 60000;
+  if (volTimestamps.length >= 2) {
+    intervalMs = volTimestamps[volTimestamps.length - 1] - volTimestamps[volTimestamps.length - 2];
+    if (!intervalMs || intervalMs <= 0) intervalMs = 60000;
+  }
+  setForecastTail(m.forecast_next, ts, m.count, intervalMs);
+  volumeChart.update();
+  updateForecastInsight(m);
+}
+
+// ---------------------------------------------------------------------
+// Forecast insight card
+// ---------------------------------------------------------------------
+function updateForecastInsight(latestMetric) {
+  const dirEl = document.getElementById('forecastDirection');
+  const textEl = document.getElementById('forecastText');
+  if (!latestMetric || latestMetric.forecast_next == null || !latestMetric.count) {
+    dirEl.className = 'forecast-direction';
+    dirEl.textContent = 'Forecast warming up…';
+    textEl.textContent = 'Collecting enough ticket volume history to project the next few minutes.';
+    return;
+  }
+  const current = latestMetric.count;
+  const forecast = latestMetric.forecast_next;
+  const pct = Math.round(((forecast - current) / current) * 100);
+  if (pct >= 0) {
+    dirEl.className = 'forecast-direction up';
+    dirEl.innerHTML = `<svg class="icon" viewBox="0 0 24 24" style="stroke:currentColor"><path d="M4 17l6-6 4 4 6-8"/><path d="M14 7h6v6"/></svg> Projected ${pct}% increase`;
+    textEl.textContent = 'Ticket volume is expected to increase over the next few minutes.';
+  } else {
+    dirEl.className = 'forecast-direction down';
+    dirEl.innerHTML = `<svg class="icon" viewBox="0 0 24 24" style="stroke:currentColor"><path d="M4 7l6 6 4-4 6 8"/><path d="M14 17h6v-6"/></svg> Projected ${Math.abs(pct)}% decrease`;
+    textEl.textContent = 'Ticket volume is expected to decrease over the next few minutes.';
+  }
+}
+
+// ---------------------------------------------------------------------
+// Incident caption (below volume chart)
+// ---------------------------------------------------------------------
+function renderIncidentCaption() {
+  const el = document.getElementById('incidentCaption');
+  if (!incidents.length) {
+    el.textContent = 'No recent incidents.';
+    return;
+  }
+  const recent = incidents.slice(-2).reverse();
+  el.innerHTML = recent.map(m => {
+    const cls = m.status === 'outage' ? 'red-text' : 'amber-text';
+    const time = new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `<span class="${cls}"><b>${m.service}</b> ${m.status === 'outage' ? 'down' : 'degraded'} · ${time}</span>`;
+  }).join(' &nbsp;&middot;&nbsp; ');
+}
+
+// ---------------------------------------------------------------------
+// KPI cards
+// ---------------------------------------------------------------------
+function renderKpis() {
+  document.getElementById('kpiTotal').textContent = counters.total_tickets.toLocaleString();
+  document.getElementById('kpiAutoResolved').textContent = counters.auto_resolved.toLocaleString();
+  document.getElementById('kpiEscalated').textContent = counters.escalated.toLocaleString();
+  const actioned = counters.auto_resolved + counters.escalated;
+  document.getElementById('kpiAutoResolvedPct').textContent = actioned ? `${Math.round((counters.auto_resolved / actioned) * 100)}% of actioned` : '—';
+  document.getElementById('kpiEscalatedPct').textContent = actioned ? `${Math.round((counters.escalated / actioned) * 100)}% of actioned` : '—';
+}
+
+// ---------------------------------------------------------------------
+// Tickets-by-service donut
+// ---------------------------------------------------------------------
+const serviceDonut = new Chart(document.getElementById('serviceDonut'), {
+  type: 'doughnut',
+  data: {
+    labels: SERVICES,
+    datasets: [{ data: SERVICES.map(() => 0), backgroundColor: SERVICES.map(s => SERVICE_COLORS[s]), borderWidth: 0 }],
+  },
+  options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false }, tooltip: { enabled: false } } },
+});
+
+function renderDonut() {
+  const total = SERVICES.reduce((sum, s) => sum + services[s].total, 0);
+  document.getElementById('donutTotal').textContent = total.toLocaleString();
+  serviceDonut.data.datasets[0].data = SERVICES.map(s => services[s].total);
+  serviceDonut.update();
+
+  const legend = document.getElementById('donutLegend');
+  legend.innerHTML = SERVICES.map(s => {
+    const pct = total ? Math.round((services[s].total / total) * 100) : 0;
+    return `<div class="donut-legend-row"><span style="display:flex;align-items:center;gap:5px;min-width:0;"><span class="dot" style="background:${SERVICE_COLORS[s]}"></span><span class="donut-legend-name">${s}</span></span><span class="donut-legend-pct">${pct}%</span></div>`;
+  }).join('');
+}
+
+// ---------------------------------------------------------------------
+// Sentiment by service
+// ---------------------------------------------------------------------
+function buildSentimentRows() {
+  const container = document.getElementById('sentimentRows');
+  container.innerHTML = SERVICES.map(s => `
+    <div>
+      <div class="sentiment-row-label"><span>${s}</span><span id="sentimentPct-${s}"></span></div>
+      <div class="sentiment-bar" id="sentimentBar-${s}"></div>
+    </div>
+  `).join('');
+}
+
+function renderSentimentRow(service) {
+  const buf = services[service].sentimentBuf;
+  const bar = document.getElementById(`sentimentBar-${service}`);
+  const pctLabel = document.getElementById(`sentimentPct-${service}`);
+  if (!buf.length) {
+    bar.innerHTML = '<span style="width:100%;background:var(--bg-elevated-2)"></span>';
+    pctLabel.textContent = 'no data yet';
+    return;
+  }
+  const counts = { positive: 0, neutral: 0, negative: 0 };
+  buf.forEach(v => { if (counts[v] !== undefined) counts[v]++; });
+  const n = buf.length;
+  const pos = Math.round((counts.positive / n) * 100);
+  const neu = Math.round((counts.neutral / n) * 100);
+  const neg = Math.max(0, 100 - pos - neu);
+  bar.innerHTML = `<span class="seg-positive" style="width:${pos}%"></span><span class="seg-neutral" style="width:${neu}%"></span><span class="seg-negative" style="width:${neg}%"></span>`;
+  pctLabel.textContent = `${pos}% / ${neu}% / ${neg}%`;
+}
+
+function renderAllSentiment() { SERVICES.forEach(renderSentimentRow); }
+
+// ---------------------------------------------------------------------
+// Live activity feed
+// ---------------------------------------------------------------------
+function pushActivity(action) {
+  const now = Date.now();
+  const top = activity[0];
+  if (top && top.service === action.service && top.action === action.action && (now - top.rawTs) < ACTIVITY_BATCH_MS) {
+    top.count += 1;
+    top.rawTs = now;
+    top.ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } else {
+    activity.unshift({ ts: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), rawTs: now, service: action.service, action: action.action, count: 1 });
+  }
+  if (activity.length > ACTIVITY_MAX) activity.length = ACTIVITY_MAX;
+  renderActivity();
+}
+
+function renderActivity() {
+  const container = document.getElementById('activityList');
+  if (!activity.length) {
+    container.innerHTML = '<div class="empty-state">Waiting for support actions&hellip;</div>';
+    return;
+  }
+  container.innerHTML = activity.map(a => {
+    const isEscalate = a.action === 'escalate';
+    const label = isEscalate ? 'Escalated' : 'Bot Answered';
+    const icon = isEscalate
+      ? '<path d="M12 19V5M12 5l-5 5M12 5l5 5"/>'
+      : '<path d="M5 12l5 5L20 6"/>';
+    return `
+      <div class="activity-item">
+        <span class="activity-time">${a.ts}</span>
+        <svg class="activity-icon action-${a.action}" viewBox="0 0 24 24" fill="none" stroke-width="2">${icon}</svg>
+        <div class="activity-body">
+          <div class="activity-label action-${a.action}">${label}</div>
+          <div class="activity-detail">${a.service || 'unknown'} &middot; ${a.count} ticket${a.count > 1 ? 's' : ''}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ---------------------------------------------------------------------
+// Sparkline / rate ticking
+// ---------------------------------------------------------------------
+setInterval(() => {
+  SERVICES.forEach(service => {
+    const s = services[service];
+    s.bucketCounts.push(s.currentBucket);
+    if (s.bucketCounts.length > SPARK_BUCKETS) s.bucketCounts.shift();
+    s.currentBucket = 0;
+    const cutoff = Date.now() - RATE_WINDOW_MS;
+    s.recentTimestamps = s.recentTimestamps.filter(t => t >= cutoff);
+    s.ticketsPerMin = s.recentTimestamps.length;
+  });
+  renderAllServiceCards();
+}, SPARK_BUCKET_MS);
+
+// ---------------------------------------------------------------------
+// WebSocket wiring
+// ---------------------------------------------------------------------
+function applyStatusSnapshot(status) {
+  if (!status || !status.services) return;
+  Object.entries(status.services).forEach(([service, statusValue]) => {
+    if (!services[service]) return;
+    services[service].status = STATUS_TO_HEALTH[statusValue] || 'operational';
+  });
+  renderAllServiceCards();
+  renderStatusRows();
+}
+
+function handleEnriched(ticket) {
+  const service = ticket.service;
+  rememberTicketService(ticket.ticket_id, service);
+  counters.total_tickets += 1;
+  renderKpis();
+  if (service && services[service]) {
+    const s = services[service];
+    s.recentTimestamps.push(Date.now());
+    s.currentBucket += 1;
+    s.total += 1;
+    if (ticket.sentiment) {
+      s.sentimentBuf.push(ticket.sentiment);
+      if (s.sentimentBuf.length > SENTIMENT_WINDOW) s.sentimentBuf.shift();
+    }
+    renderSentimentRow(service);
+    renderDonut();
+  }
+}
+
+function handleAgentAction(action) {
+  if (action.action === 'auto_resolve') counters.auto_resolved += 1;
+  else if (action.action === 'escalate') counters.escalated += 1;
+  renderKpis();
+  pushActivity({ ...action, service: resolveActionService(action) });
+}
+
+function handleStatusEvent(status) {
+  const previous = {};
+  SERVICES.forEach(s => { previous[s] = services[s].status; });
+  applyStatusSnapshot(status);
+  SERVICES.forEach(s => {
+    if (services[s].status !== previous[s] && services[s].status !== 'operational') {
+      incidents.push({ ts: Date.now(), service: s, status: services[s].status });
+      renderIncidentCaption();
+    }
+  });
+}
+
+function applySnapshot(snap) {
+  if (snap.counters) Object.assign(counters, snap.counters);
+  renderKpis();
+
+  volLabels = []; volTimestamps = []; volActual = []; volForecast = []; hasForecastTail = false;
+  (snap.recent_metrics || []).forEach(pushMetricPoint);
+
+  activity = (snap.recent_actions || []).slice().reverse().map(a => ({
+    ts: new Date(a.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    rawTs: 0, service: resolveActionService(a), action: a.action, count: 1,
+  })).slice(0, ACTIVITY_MAX);
+  renderActivity();
+
+  applyStatusSnapshot(snap.status);
+}
+
+let reconnectDelay = 1000;
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/dashboard`);
+
+  ws.onopen = () => { reconnectDelay = 1000; setConnectionState('live'); };
+
+  ws.onmessage = (evt) => {
+    const msg = JSON.parse(evt.data);
+    if (msg.type === 'snapshot') applySnapshot(msg.data);
+    else if (msg.type === 'enriched') handleEnriched(msg.data);
+    else if (msg.type === 'metrics') pushMetricPoint(msg.data);
+    else if (msg.type === 'agent_action') handleAgentAction(msg.data);
+    else if (msg.type === 'status') handleStatusEvent(msg.data);
+  };
+
+  ws.onclose = () => {
+    setConnectionState(reconnectDelay >= 10000 ? 'disconnected' : 'reconnecting');
+    setTimeout(connect, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+  };
+  ws.onerror = () => ws.close();
+}
+
+// ---------------------------------------------------------------------
+// Admin API helpers (mirrors console.html's token pattern)
+// ---------------------------------------------------------------------
+async function adminPost(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': adminToken },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data;
+}
+
+async function adminGet(path) {
+  const res = await fetch(path, { headers: { 'X-Admin-Token': adminToken } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data;
+}
+
+// ---------------------------------------------------------------------
+// Drawer: open/close
+// ---------------------------------------------------------------------
+function openDrawer(preselectService) {
+  if (!adminToken) {
+    openTokenModal(() => openDrawer(preselectService));
+    return;
+  }
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('open');
+  refreshGeneratorStatus();
+  if (preselectService) {
+    const row = document.querySelector(`.status-row[data-service="${preselectService}"]`);
+    if (row) row.scrollIntoView({ block: 'center' });
+  }
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('open');
+}
+document.getElementById('openDrawerBtn').addEventListener('click', () => openDrawer());
+document.getElementById('closeDrawerBtn').addEventListener('click', closeDrawer);
+document.getElementById('drawerOverlay').addEventListener('click', closeDrawer);
+
+// ---------------------------------------------------------------------
+// Admin token modal — asked for up front, before the demo controls open
+// ---------------------------------------------------------------------
+function openTokenModal(onSuccess) {
+  const overlay = document.getElementById('tokenModalOverlay');
+  const input = document.getElementById('tokenModalInput');
+  const error = document.getElementById('tokenModalError');
+  error.hidden = true;
+  input.type = 'password';
+  document.getElementById('tokenModalToggleBtn').textContent = 'show';
+  input.value = adminToken;
+  overlay.classList.add('open');
+  input.focus();
+
+  async function submit() {
+    const value = input.value.trim();
+    if (!value) return;
+    const previousToken = adminToken;
+    adminToken = value;
+    try {
+      await adminGet('/admin/generator'); // validates the token before dismissing the modal
+      sessionStorage.setItem('admin_token', adminToken);
+      overlay.classList.remove('open');
+      onSuccess();
+    } catch (e) {
+      adminToken = previousToken;
+      error.hidden = false;
+    }
+  }
+
+  document.getElementById('tokenModalSubmitBtn').onclick = submit;
+  input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+  document.getElementById('tokenModalCancelBtn').onclick = () => {
+    overlay.classList.remove('open');
+  };
+  document.getElementById('tokenModalToggleBtn').onclick = () => {
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    document.getElementById('tokenModalToggleBtn').textContent = showing ? 'show' : 'hide';
+  };
+}
+document.getElementById('changeTokenBtn').addEventListener('click', () => {
+  openTokenModal(() => refreshGeneratorStatus());
+});
+
+// ---------------------------------------------------------------------
+// Drawer: Ticket Generator
+// ---------------------------------------------------------------------
+function renderGeneratorStatus(data) {
+  const line = document.getElementById('genStatusLine');
+  const text = document.getElementById('genStatusText');
+  if (!data || !data.enabled) {
+    line.classList.add('paused');
+    text.textContent = 'Generator unavailable';
+    return;
+  }
+  const perMin = Math.round(data.rate * 60);
+  line.classList.toggle('paused', !data.running);
+  text.textContent = data.running ? `Baseline running · ${perMin} tickets/min` : `Paused · ${perMin} tickets/min`;
+  document.querySelectorAll('#ratePresets .preset-btn').forEach(btn => {
+    btn.classList.toggle('active', Math.abs(parseFloat(btn.dataset.rate) - data.rate) < 0.001);
+  });
+}
+
+async function refreshGeneratorStatus() {
+  if (!adminToken) {
+    renderGeneratorStatus(null);
+    document.getElementById('genStatusText').textContent = 'Enter admin token to control the generator';
+    return;
+  }
+  try {
+    const data = await adminGet('/admin/generator');
+    renderGeneratorStatus(data);
+  } catch (e) {
+    document.getElementById('genStatusText').textContent = 'Enter admin token to control the generator';
+  }
+}
+
+document.getElementById('pauseGenBtn').addEventListener('click', async () => {
+  try { renderGeneratorStatus(await adminPost('/admin/generator', { action: 'pause' })); }
+  catch (e) { showToast(`Error: ${e.message}`, true); }
+});
+document.getElementById('resumeGenBtn').addEventListener('click', async () => {
+  try { renderGeneratorStatus(await adminPost('/admin/generator', { action: 'resume' })); }
+  catch (e) { showToast(`Error: ${e.message}`, true); }
+});
+document.querySelectorAll('#ratePresets .preset-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    try { renderGeneratorStatus(await adminPost('/admin/generator', { action: 'rate', rate: parseFloat(btn.dataset.rate) })); }
+    catch (e) { showToast(`Error: ${e.message}`, true); }
+  });
+});
+
+// ---------------------------------------------------------------------
+// Drawer: Manual burst
+// ---------------------------------------------------------------------
+async function pollBurstStatus(intervalMs, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, intervalMs));
+    const data = await adminGet('/admin/burst-status');
+    if (!data.in_progress) return data;
+  }
+  return null;
+}
+
+document.getElementById('startBurstBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('startBurstBtn');
+  const service = document.getElementById('burstService').value;
+  const seconds = parseInt(document.getElementById('burstDuration').value, 10);
+  const label = document.getElementById('burstDuration').selectedOptions[0].textContent;
+  btn.disabled = true;
+  try {
+    await adminPost('/admin/burst', { service, count: seconds, interval_ms: 1000 });
+    showToast(`Burst started for ${service === 'all' ? 'all services' : service} · ${label}`);
+    const finalStatus = await pollBurstStatus(500, seconds * 1000 + 10000);
+    if (finalStatus && finalStatus.last_error) showToast(`Burst finished with an error: ${finalStatus.last_error}`, true);
+  } catch (e) {
+    showToast(`Error: ${e.message}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------------
+// Drawer: Service Status
+// ---------------------------------------------------------------------
+let pendingChange = null; // {service, status}
+const revertTimers = {};
+
+function buildStatusRows() {
+  const container = document.getElementById('statusRows');
+  container.innerHTML = SERVICES.map(service => `
+    <div class="status-row" data-service="${service}">
+      <span class="status-row-name">${service}</span>
+      <div class="segmented" data-service="${service}">
+        <button data-value="operational">Healthy</button>
+        <button data-value="degraded">Degraded</button>
+        <button data-value="outage">Down</button>
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.segmented button').forEach(btn => {
+    btn.addEventListener('click', () => onStatusButtonClick(btn.closest('.segmented').dataset.service, btn.dataset.value));
+  });
+}
+
+function renderStatusRows() {
+  document.querySelectorAll('.segmented').forEach(seg => {
+    const service = seg.dataset.service;
+    const live = services[service].status;
+    seg.querySelectorAll('button').forEach(btn => {
+      btn.classList.remove('live-operational', 'live-degraded', 'live-outage', 'pending');
+      if (pendingChange && pendingChange.service === service) {
+        if (btn.dataset.value === pendingChange.status) btn.classList.add('pending');
+      } else if (btn.dataset.value === live) {
+        btn.classList.add(`live-${live}`);
+      }
+    });
+  });
+}
+
+async function onStatusButtonClick(service, statusValue) {
+  if (statusValue === 'operational') {
+    // Reverting to healthy needs no duration/scenario setup -- apply immediately.
+    if (revertTimers[service]) { clearTimeout(revertTimers[service]); delete revertTimers[service]; }
+    pendingChange = null;
+    document.getElementById('statusApplyPanel').hidden = true;
+    await applyIncident(service, 'operational', '', null);
+    return;
+  }
+  pendingChange = { service, status: statusValue };
+  renderStatusRows();
+  document.getElementById('pendingServiceName').textContent = service;
+  document.getElementById('pendingStatusName').textContent = HEALTH_LABEL[statusValue];
+  const scenarioSelect = document.getElementById('incidentScenario');
+  scenarioSelect.innerHTML = '<option value="">Select a scenario…</option>' +
+    (INCIDENT_SCENARIOS[service] || []).map(s => `<option value="${s}">${s}</option>`).join('');
+  document.getElementById('statusApplyPanel').hidden = false;
+}
+
+document.getElementById('applyStatusBtn').addEventListener('click', async () => {
+  if (!pendingChange) return;
+  const durationRaw = document.getElementById('incidentDuration').value;
+  const durationMs = durationRaw ? parseInt(durationRaw, 10) : null;
+  const description = document.getElementById('incidentScenario').value;
+  await applyIncident(pendingChange.service, pendingChange.status, description, durationMs);
+  pendingChange = null;
+  document.getElementById('statusApplyPanel').hidden = true;
+  renderStatusRows();
+});
+
+async function applyIncident(service, status, description, durationMs) {
+  try {
+    await adminPost('/admin/status', { service, status, description });
+    if (revertTimers[service]) { clearTimeout(revertTimers[service]); delete revertTimers[service]; }
+    if (durationMs) {
+      revertTimers[service] = setTimeout(() => applyIncident(service, 'operational', '', null), durationMs);
+    }
+    showToast(status === 'operational' ? `${service} restored to Healthy` : `${service} set to ${HEALTH_LABEL[status]}`);
+  } catch (e) {
+    showToast(`Error: ${e.message}`, true);
+  }
+}
+
+// ---------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------
+buildServiceCards();
+buildSentimentRows();
+buildStatusRows();
+renderAllServiceCards();
+renderAllSentiment();
+renderDonut();
+renderKpis();
+renderStatusRows();
+connect();
+</script>
+</body>
+</html>
